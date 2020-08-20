@@ -1,0 +1,76 @@
+# Node.js with Angular
+# Build a Node.js project that uses Angular.
+# Add steps that analyze code, save build artifacts, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
+
+trigger:
+- none
+
+variables:
+- name: vmImageName
+  value: 'ubuntu-latest'
+
+- name: webAppName
+  value: 'angulargks'
+
+- name: azureSubscription
+  value: 'angularGaurav'
+
+stages:
+  - stage: Build
+    displayName: Building Stage
+    jobs:
+      - job: Build
+        displayName: Building Job
+        pool:
+          vmImage: $(vmImageName)
+          demands: 
+          - npm
+        steps:
+          - task: NodeTool@0
+            displayName: Installing Nodejs
+            inputs:
+              versionSpec: 10.x
+          - script: |
+              npm install -g @angular/cli
+              npm install
+              ng build --prod
+            displayName: 'npm install and build'
+          - task: ArchiveFiles@2
+            inputs:
+              rootFolderOrFile: '$(System.DefaultWorkingDirectory)'
+              includeRootFolder: false
+              archiveType: 'zip'
+              archiveFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
+              replaceExistingArchive: true
+          - task: PublishBuildArtifacts@1
+            inputs:
+              PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+              ArtifactName: 'drop'
+              publishLocation: 'Container'
+          
+  - stage: Deploy
+    displayName: Deployment Stage
+    dependsOn: 
+    - Build
+    condition: succeeded()
+    jobs:
+    - deployment: Deploy
+      displayName: Deploying to Azure App Service
+      environment:
+        name: $(webAppName)
+      pool:
+        vmImage: $(vmImageName)
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+            - task: AzureWebApp@1
+              displayName: Deploying to webapp
+              inputs:
+                azureSubscription: $(azureSubscription)
+                appType: webAppLinux
+                package: $(Pipeline.Workspace)/drop/$(Build.BuildId).zip
+                appName: $(webAppName)
+                runtimeStack: NODE|10.10
+                
